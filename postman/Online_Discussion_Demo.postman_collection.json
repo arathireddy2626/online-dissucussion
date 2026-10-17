@@ -1,0 +1,791 @@
+{
+  "info": {
+    "name": "Online Discussion Tool - Database Demo",
+    "description": "Runs the 9 demo scenarios against EITHER database. Pick the environment \"MySQL\" (port 3001) or \"MongoDB\" (port 3002) in the top-right corner, then run the folder in order.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Check the server is running",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200 OK', () => pm.response.to.have.status(200))",
+              "pm.test('Database is connected', () => pm.expect(pm.response.json().ok).to.eql(true))"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        },
+        "description": "Warm-up. Shows that Postman can reach the server and that the server can reach its database."
+      },
+      "response": []
+    },
+    {
+      "name": "0b. Instructor logs in",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200 OK', () => pm.response.to.have.status(200))",
+              "pm.test('The user is the Instructor', () => {",
+              "  pm.expect(pm.response.json().user.role).to.eql('Instructor')",
+              "})"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{instructorUser}}\",\n  \"password\": \"{{instructorPass}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Checks the instructor account stored in the database (password is stored as a hash)."
+      },
+      "response": []
+    },
+    {
+      "name": "1. Student makes a request to enroll",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Runs BEFORE the request is sent: invent a brand-new student so the demo can be repeated",
+              "const firstNames = ['Maya', 'Omar', 'Lena', 'Ravi', 'Chloe', 'Tariq', 'Nora', 'Felix']",
+              "const lastNames = ['Singh', 'Haddad', 'Fischer', 'Patel', 'Moreau', 'Khalid', 'Lindgren', 'Costa']",
+              "const pickOne = (list) => list[Math.floor(Math.random() * list.length)]",
+              "",
+              "const studentId = Math.floor(100000 + Math.random() * 900000)   // 6-digit student ID",
+              "const first = pickOne(firstNames)",
+              "const last = pickOne(lastNames)",
+              "",
+              "pm.collectionVariables.set('studentId', studentId)",
+              "pm.collectionVariables.set('studentFirst', first)",
+              "pm.collectionVariables.set('studentLast', last)",
+              "pm.collectionVariables.set('studentEmail', (first + '.' + last + studentId + '@campus.edu').toLowerCase())",
+              "console.log('New student:', first, last, 'ID', studentId)"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201 Created', () => pm.response.to.have.status(201))",
+              "pm.test('The server confirms the request', () => {",
+              "  pm.expect(pm.response.json().message).to.eql('Request submitted.')",
+              "})"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"studentId\": {{studentId}},\n  \"type\": \"enrollment\",\n  \"firstname\": \"{{studentFirst}}\",\n  \"lastname\": \"{{studentLast}}\",\n  \"email\": \"{{studentEmail}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/enrollment-requests",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "enrollment-requests"
+          ]
+        },
+        "description": "Writes a StudentRecord and an EnrollQueue entry. The pre-request script makes a brand-new student each run, so the demo can be repeated."
+      },
+      "response": []
+    },
+    {
+      "name": "1b. Instructor retrieves the request",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const wanted = Number(pm.collectionVariables.get('studentId'))",
+              "const found = pm.response.json().requests.find((r) => Number(r.studentId) === wanted && r.type === 'enrollment')",
+              "pm.test('Status is 200 OK', () => pm.response.to.have.status(200))",
+              "pm.test('The new student is waiting for approval', () => {",
+              "  pm.expect(found, 'request not found').to.exist",
+              "  pm.expect(found.status).to.eql('Pending review')",
+              "})"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/enrollment-requests",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "enrollment-requests"
+          ]
+        },
+        "description": "The instructor sees the student waiting in the enroll queue."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Instructor adds the student",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json()",
+              "pm.test('Status is 201 Created', () => pm.response.to.have.status(201))",
+              "pm.test('A username and password were generated', () => {",
+              "  pm.expect(body.username).to.be.a('string').and.not.empty",
+              "  pm.expect(body.password, 'password missing: apply the line 265 fix in server/index.js').to.be.a('string').and.not.empty",
+              "})",
+              "",
+              "// keep the new login so the student can sign in in the next step",
+              "pm.collectionVariables.set('studentUser', body.username)",
+              "pm.collectionVariables.set('studentPass', body.password)",
+              "",
+              "// ask the server again: the request must be gone from the queue",
+              "pm.sendRequest({ url: pm.environment.get('baseUrl') + '/api/enrollment-requests', method: 'GET' }, (err, res) => {",
+              "  const wanted = Number(pm.collectionVariables.get('studentId'))",
+              "  const still = res.json().requests.find((r) => Number(r.studentId) === wanted && r.type === 'enrollment')",
+              "  pm.test('The request is no longer pending', () => pm.expect(still).to.be.undefined)",
+              "})"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/students/{{studentId}}/credentials",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "students",
+            "{{studentId}}",
+            "credentials"
+          ]
+        },
+        "description": "Approves the request: creates the login, links it to the student record and removes the request from the queue. The new username and password come back in the answer."
+      },
+      "response": []
+    },
+    {
+      "name": "2b. Student logs in with the new login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200 OK', () => pm.response.to.have.status(200))",
+              "pm.test('The user is a Student with the new username', () => {",
+              "  const user = pm.response.json().user",
+              "  pm.expect(user.role).to.eql('Student')",
+              "  pm.expect(user.username).to.eql(pm.collectionVariables.get('studentUser'))",
+              "})"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{studentUser}}\",\n  \"password\": \"{{studentPass}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Proves the stored login really works."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Instructor creates a new discussion",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const stamp = new Date().toISOString().slice(11, 19)   // for example 14:05:33",
+              "pm.collectionVariables.set('topic1', 'Demo 1: Database design basics (' + stamp + ')')"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201 Created', () => pm.response.to.have.status(201))",
+              "pm.test('The new discussion has an ID', () => pm.expect(pm.response.json().id).to.match(/^[0-9]+$/))",
+              "pm.collectionVariables.set('discussion1Id', pm.response.json().id)"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"topic\": \"{{topic1}}\",\n  \"content\": \"Welcome! What makes a good database design?\",\n  \"username\": \"{{instructorUser}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/discussions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "discussions"
+          ]
+        },
+        "description": "Writes a row in Dicussion, plus the first message and its link."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Instructor posts a message to the discussion",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201 Created', () => pm.response.to.have.status(201))",
+              "pm.test('The message has its own ID', () => pm.expect(pm.response.json().id).to.match(/^[0-9]+$/))",
+              "pm.collectionVariables.set('instructorMsgId', pm.response.json().id)"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{instructorUser}}\",\n  \"content\": \"Think about keys, relationships and unique IDs.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/discussions/{{discussion1Id}}/messages",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "discussions",
+            "{{discussion1Id}}",
+            "messages"
+          ]
+        },
+        "description": "Writes a row in Message and links it to the discussion in DiscussionToMessage."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Student posts a message to the discussion",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201 Created', () => pm.response.to.have.status(201))",
+              "const id = pm.response.json().id",
+              "pm.test('The message ID is different from the instructor message ID', () => {",
+              "  pm.expect(id).to.not.eql(pm.collectionVariables.get('instructorMsgId'))",
+              "})",
+              "pm.collectionVariables.set('studentMsgId', id)"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{studentUser}}\",\n  \"content\": \"A primary key is a unique ID for each row.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/discussions/{{discussion1Id}}/messages",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "discussions",
+            "{{discussion1Id}}",
+            "messages"
+          ]
+        },
+        "description": "Same route, different user."
+      },
+      "response": []
+    },
+    {
+      "name": "6. Instructor creates a second discussion",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// The database stores the creation time to the second and each discussion needs a different time,",
+              "// so wait a little over one second after the first discussion.",
+              "setTimeout(() => {}, 1100)",
+              "",
+              "const stamp = new Date().toISOString().slice(11, 19)",
+              "pm.collectionVariables.set('topic2', 'Demo 2: SQL versus NoSQL (' + stamp + ')')"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201 Created', () => pm.response.to.have.status(201))",
+              "const id = pm.response.json().id",
+              "pm.test('It is a different discussion from the first one', () => {",
+              "  pm.expect(id).to.not.eql(pm.collectionVariables.get('discussion1Id'))",
+              "})",
+              "pm.collectionVariables.set('discussion2Id', id)"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"topic\": \"{{topic2}}\",\n  \"content\": \"Next topic: SQL versus NoSQL. When would you use each?\",\n  \"username\": \"{{instructorUser}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/discussions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "discussions"
+          ]
+        },
+        "description": "The pre-request script waits just over one second, because each discussion needs a different creation time in the database."
+      },
+      "response": []
+    },
+    {
+      "name": "7. Student posts a message to the second discussion",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201 Created', () => pm.response.to.have.status(201))",
+              "const id = pm.response.json().id",
+              "pm.test('The message ID is new (not used by any earlier message)', () => {",
+              "  const used = [pm.collectionVariables.get('instructorMsgId'), pm.collectionVariables.get('studentMsgId')]",
+              "  pm.expect(used).to.not.include(id)",
+              "})",
+              "pm.collectionVariables.set('studentMsg2Id', id)"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{studentUser}}\",\n  \"content\": \"I would use SQL when the data has clear relationships.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/discussions/{{discussion2Id}}/messages",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "discussions",
+            "{{discussion2Id}}",
+            "messages"
+          ]
+        },
+        "description": "The message goes to discussion 2 only, not to discussion 1."
+      },
+      "response": []
+    },
+    {
+      "name": "8. Instructor selects and views a discussion",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('selectedDiscussionId', pm.collectionVariables.get('discussion1Id'))"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const selectedId = String(pm.collectionVariables.get('selectedDiscussionId'))",
+              "const all = pm.response.json().discussions",
+              "const selected = all.find((d) => d.id === selectedId)",
+              "",
+              "pm.test('Status is 200 OK', () => pm.response.to.have.status(200))",
+              "",
+              "pm.test('The selected discussion is in the list', () => {",
+              "  pm.expect(selected, 'discussion ' + selectedId + ' not found').to.exist",
+              "})",
+              "",
+              "pm.test('The topic is the one we created', () => {",
+              "  pm.expect(selected.topic).to.eql(pm.collectionVariables.get('topic1'))",
+              "})",
+              "",
+              "pm.test('It has 3 entries', () => {",
+              "  pm.expect(selected.entries).to.have.lengthOf(3)",
+              "})",
+              "",
+              "pm.test('Entries come from the right people', () => {",
+              "  const names = selected.entries.map((e) => e.username)",
+              "  pm.expect(names).to.include(pm.environment.get('instructorUser'))",
+              "  pm.expect(names).to.include(pm.collectionVariables.get('studentUser'))",
+              "})",
+              "",
+              "pm.test('Every Message ID in the two demo discussions is distinct', () => {",
+              "  const ids = ['discussion1Id', 'discussion2Id']",
+              "    .map((v) => all.find((d) => d.id === String(pm.collectionVariables.get(v))))",
+              "    .flatMap((d) => d.entries.map((e) => e.id))",
+              "  pm.expect(new Set(ids).size).to.eql(ids.length)",
+              "})",
+              "",
+              "// Show the discussion as a table in the Visualize tab (instructor view)",
+              "if (selected && pm.visualizer) {",
+              "  pm.visualizer.set(",
+              "    '<style>body{font-family:Arial;padding:8px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ccc;padding:6px;text-align:left} th{background:#e0e7ff}</style>' +",
+              "    '<h3>{{topic}}</h3><p>Viewed by the instructor</p>' +",
+              "    '<table><tr><th>Message ID</th><th>User</th><th>Posted at</th><th>Message</th></tr>' +",
+              "    '{{#each entries}}<tr><td>{{id}}</td><td>{{username}}</td><td>{{postedAt}}</td><td>{{content}}</td></tr>{{/each}}</table>',",
+              "    { topic: selected.topic, entries: selected.entries }",
+              "  )",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/discussions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "discussions"
+          ]
+        },
+        "description": "The instructor picks discussion 1. The test script selects it from the list and shows it in the Visualize tab."
+      },
+      "response": []
+    },
+    {
+      "name": "9. Student selects and views a discussion",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('selectedDiscussionId', pm.collectionVariables.get('discussion2Id'))"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const selectedId = String(pm.collectionVariables.get('selectedDiscussionId'))",
+              "const all = pm.response.json().discussions",
+              "const selected = all.find((d) => d.id === selectedId)",
+              "",
+              "pm.test('Status is 200 OK', () => pm.response.to.have.status(200))",
+              "",
+              "pm.test('The selected discussion is in the list', () => {",
+              "  pm.expect(selected, 'discussion ' + selectedId + ' not found').to.exist",
+              "})",
+              "",
+              "pm.test('The topic is the one we created', () => {",
+              "  pm.expect(selected.topic).to.eql(pm.collectionVariables.get('topic2'))",
+              "})",
+              "",
+              "pm.test('It has 2 entries', () => {",
+              "  pm.expect(selected.entries).to.have.lengthOf(2)",
+              "})",
+              "",
+              "pm.test('Entries come from the right people', () => {",
+              "  const names = selected.entries.map((e) => e.username)",
+              "  pm.expect(names).to.include(pm.environment.get('instructorUser'))",
+              "  pm.expect(names).to.include(pm.collectionVariables.get('studentUser'))",
+              "})",
+              "",
+              "pm.test('Every Message ID in the two demo discussions is distinct', () => {",
+              "  const ids = ['discussion1Id', 'discussion2Id']",
+              "    .map((v) => all.find((d) => d.id === String(pm.collectionVariables.get(v))))",
+              "    .flatMap((d) => d.entries.map((e) => e.id))",
+              "  pm.expect(new Set(ids).size).to.eql(ids.length)",
+              "})",
+              "",
+              "// Show the discussion as a table in the Visualize tab (student view)",
+              "if (selected && pm.visualizer) {",
+              "  pm.visualizer.set(",
+              "    '<style>body{font-family:Arial;padding:8px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ccc;padding:6px;text-align:left} th{background:#e0e7ff}</style>' +",
+              "    '<h3>{{topic}}</h3><p>Viewed by the student</p>' +",
+              "    '<table><tr><th>Message ID</th><th>User</th><th>Posted at</th><th>Message</th></tr>' +",
+              "    '{{#each entries}}<tr><td>{{id}}</td><td>{{username}}</td><td>{{postedAt}}</td><td>{{content}}</td></tr>{{/each}}</table>',",
+              "    { topic: selected.topic, entries: selected.entries }",
+              "  )",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/discussions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "discussions"
+          ]
+        },
+        "description": "The student picks discussion 2."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "studentId",
+      "value": ""
+    },
+    {
+      "key": "studentFirst",
+      "value": ""
+    },
+    {
+      "key": "studentLast",
+      "value": ""
+    },
+    {
+      "key": "studentEmail",
+      "value": ""
+    },
+    {
+      "key": "studentUser",
+      "value": ""
+    },
+    {
+      "key": "studentPass",
+      "value": ""
+    },
+    {
+      "key": "topic1",
+      "value": ""
+    },
+    {
+      "key": "topic2",
+      "value": ""
+    },
+    {
+      "key": "discussion1Id",
+      "value": ""
+    },
+    {
+      "key": "discussion2Id",
+      "value": ""
+    },
+    {
+      "key": "instructorMsgId",
+      "value": ""
+    },
+    {
+      "key": "studentMsgId",
+      "value": ""
+    },
+    {
+      "key": "studentMsg2Id",
+      "value": ""
+    },
+    {
+      "key": "selectedDiscussionId",
+      "value": ""
+    }
+  ]
+}
